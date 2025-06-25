@@ -13,7 +13,7 @@ def wave_file(filename, pcm, channels=1, rate=24000, sample_width=2):
         wf.setframerate(rate)
         wf.writeframes(pcm)
 
-client = genai.Client(api_key="AIzaSyDmYV4qtRyd4fpeMTuBBpXl9LPzXoU12Jc")
+client = genai.Client(api_key="AIzaSyDnVzGS5dk7QdzVZKvB5NnZ6idBqtjybgg")
 
 with open("phrases.json") as f:
     data = json.load(f)
