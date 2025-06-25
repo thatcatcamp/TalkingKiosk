@@ -49,36 +49,42 @@ class RandomAudioManager(private val context: Context) {
         }
     }
     
-    fun playRandomAudio() {
+    private var currentTrackIndex = 0
+
+    fun playNextAudio() {
         if (audioFiles.isEmpty()) {
             android.util.Log.w("RandomAudioManager", "No audio files available")
             return
         }
-        
+
         if (_isPlaying.value) {
             android.util.Log.d("RandomAudioManager", "Audio already playing, ignoring request")
             return
         }
-        
-        val randomFile = audioFiles[Random.nextInt(audioFiles.size)]
-        android.util.Log.d("RandomAudioManager", "Playing random audio: $randomFile")
-        
-        // Set current filename (remove .wav extension for matching with JSON)
-        _currentFileName.value = randomFile.removeSuffix(".wav")
-        
+
+        if (currentTrackIndex >= audioFiles.size) {
+            currentTrackIndex = 0
+            audioFiles = audioFiles.shuffled()
+        }
+
+        val nextFile = audioFiles[currentTrackIndex++]
+        android.util.Log.d("RandomAudioManager", "Playing next audio: $nextFile")
+
+        _currentFileName.value = nextFile.removeSuffix(".wav")
+
         try {
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer().apply {
-                val afd: AssetFileDescriptor = context.assets.openFd(randomFile)
+                val afd: AssetFileDescriptor = context.assets.openFd(nextFile)
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 afd.close()
-                
+
                 setOnPreparedListener {
                     start()
                     _isPlaying.value = true
                     startAudioLevelSimulation()
                 }
-                
+
                 setOnCompletionListener {
                     _isPlaying.value = false
                     _currentFileName.value = ""
@@ -86,7 +92,7 @@ class RandomAudioManager(private val context: Context) {
                     _audioLevel.value = 0f
                     android.util.Log.d("RandomAudioManager", "Audio playback completed")
                 }
-                
+
                 setOnErrorListener { _, what, extra ->
                     android.util.Log.e("RandomAudioManager", "MediaPlayer error: what=$what extra=$extra")
                     _isPlaying.value = false
@@ -95,13 +101,19 @@ class RandomAudioManager(private val context: Context) {
                     _audioLevel.value = 0f
                     false
                 }
-                
+
                 prepareAsync()
             }
         } catch (e: Exception) {
             android.util.Log.e("RandomAudioManager", "Error playing audio", e)
             _isPlaying.value = false
         }
+    }
+
+    fun playRandomAudio() {
+        audioFiles = audioFiles.shuffled()
+        currentTrackIndex = 0
+        playNextAudio()
     }
     
     fun stopPlaying() {
@@ -123,9 +135,8 @@ class RandomAudioManager(private val context: Context) {
         _isContinuousMode.value = true
         
         continuousPlaybackJob = CoroutineScope(Dispatchers.Main).launch {
-            // Play first audio immediately
-            playRandomAudio()
-            
+            playNextAudio()
+
             while (_isContinuousMode.value) {
                 // Wait for current audio to finish or timeout
                 var waitTime = 0L
@@ -133,14 +144,14 @@ class RandomAudioManager(private val context: Context) {
                     delay(1000)
                     waitTime += 1000
                 }
-                
+
                 if (_isContinuousMode.value) {
                     // Wait 30 seconds between audio files
                     android.util.Log.d("RandomAudioManager", "Waiting 30 seconds before next audio")
                     delay(30000)
-                    
+
                     if (_isContinuousMode.value) {
-                        playRandomAudio()
+                        playNextAudio()
                     }
                 }
             }
